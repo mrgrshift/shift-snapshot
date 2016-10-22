@@ -56,13 +56,3 @@ Example of output:<br>
   20-10-2016 - 21:36:07 -- Snapshot created successfully at block  49037 ( 43 MB)  
   --------------------------------------------------END                            
 ```
-<br>
-##Troubleshooting
-There's some expecting error due to format, if you have this error:
-```
-shift-snapshot.sh: line 13: $'\r': command not found
-shift-snapshot.sh: line 38: syntax error near unexpected token `$'{\r''
-'hift-snapshot.sh: line 38: `create_snapshot() {
-```
-Please execute the following command:
-`sed -i 's/\r$//' shift-snapshot.sh`
