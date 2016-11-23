@@ -71,8 +71,10 @@ Schedule snapshot creation periodically, with the available parameters:
 
 Example: `bash shift-snapshot.sh schedule daily`
 <br>
+
 -------------------------------------------------------------
-Â###Notice
+
+###Notice
 You will have a folder in ~/shift-snapshot/ called `snapshot/` where all your snapshots will be created and stored.
 If you want to use a snapshot from different place (official snapshot for example or other node) you will need to download the snapshot file (with prefix: shift_db*) and copy it to the `~/shift-snapshot/snapshot/` folder.
 After you copy the shift_db*.tar file you can restore the blockchain with: `bash shift-snapshot.sh restore` and will use the last file found in the snapshot/ folder.<br>
