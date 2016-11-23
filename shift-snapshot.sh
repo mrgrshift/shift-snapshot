@@ -1,18 +1,18 @@
 #!/bin/bash
-VERSION="0.0.1"
+VERSION="0.2"
 
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 
-echo "============================================================"
-echo "= snapshot.sh v$VERSION created by mrgr                       ="
-echo "= Please consider voting for delegate mrgr                 ="
-echo "============================================================"
+#============================================================
+#= snapshot.sh v0.2 created by mrgr                         =
+#= Please consider voting for delegate mrgr                 =
+#============================================================
 echo " "
 
-if [ ! -f "$(pwd)/app.js" ]; then
-  echo "Error: Please consider to execute this script on shift/ folder."
+if [ ! -f ../shift/app.js ]; then
+  echo "Error: No shift installation detected. Exiting."
   exit 1
 fi
 
@@ -23,13 +23,14 @@ fi
 
 SNAPSHOT_COUNTER=snapshot/counter.json
 SNAPSHOT_LOG=snapshot/snapshot.log
-if [ ! -f "$(pwd)/snapshot/counter.json" ]; then
+if [ ! -f "snapshot/counter.json" ]; then
   mkdir -p snapshot
+  sudo chmod a+x shift-snapshot.sh
   echo "0" > $SNAPSHOT_COUNTER
   sudo chown postgres:${USER:=$(/usr/bin/id -run)} snapshot
   sudo chmod -R g+w snapshot
 fi
-SNAPSHOT_DIRECTORY=$(pwd)/snapshot/
+SNAPSHOT_DIRECTORY=snapshot/
 
 
 NOW=$(date +"%d-%m-%Y - %T")
@@ -96,6 +97,43 @@ show_log(){
   echo "--------------------------------------------------END"
 }
 
+schedule_cron(){
+	echo "All your crontab settings will be overwritten."
+
+        read -p "Do you want to continue (y/n)?" -n 1 -r
+        if [[  $REPLY =~ ^[Yy]$ ]]
+           then
+	echo " "
+	case $1 in
+	"hourly")
+		echo "0 * * * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
+		sudo crontab schedule
+		echo "The snapshot has been scheduled every hour";
+	;;
+	"daily")
+		echo "0 0 * * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
+                sudo crontab schedule
+                echo "The snapshot has been scheduled once a day";
+	;;
+        "weekly")
+		echo "0 0 * * 0 cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
+                sudo crontab schedule
+                echo "The snapshot has been scheduled once a week";
+        ;;
+        "monthly")
+		echo "0 0 1 * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
+                sudo crontab schedule
+                echo "The snapshot has been scheduled once a month";
+        ;;
+        *)
+	echo "Error: Wrong parameter for cron option."
+        ;;
+	esac
+
+	rm schedule
+
+	fi
+}
 
 ################################################################################
 
@@ -109,6 +147,9 @@ case $1 in
 "log")
   show_log
   ;;
+"schedule")
+  schedule_cron $2
+  ;;
 "hello")
   echo "Hello my friend - $NOW"
   ;;
@@ -117,10 +158,17 @@ case $1 in
   echo "  create   - Create new snapshot"
   echo "  restore  - Restore the last snapshot available in folder snapshot/"
   echo "  log      - Display log"
+  echo "  schedule - Schedule snapshot creation periodically, available parameters:"
+  echo "		- hourly"
+  echo "		- daily"
+  echo "		- weekly"
+  echo "		- monthly"
+  echo "		Example $ bash shift-snapshot.sh schedule daily"
   ;;
 *)
   echo "Error: Unrecognized command."
   echo ""
-  echo "Available commands are: create, restore, log"
+  echo "Available commands are: create, restore, log, cron, help"
+  echo "Try: bash shift-snapshot.sh help"
   ;;
 esac
