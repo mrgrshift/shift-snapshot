@@ -64,10 +64,11 @@ Example of output:<br>
 
 ###schedule
 Schedule snapshot creation periodically, with the available parameters:
-		- hourly
-		- daily
-		- weekly
-		- monthly
+
+    - hourly
+    - daily
+    - weekly
+    - monthly
 
 Example: `bash shift-snapshot.sh schedule daily`
 <br>
