@@ -1,6 +1,6 @@
 #shift-snapshot
 A bash script to automate backups for SHIFT blockchain<br>
-v0.0.1
+v0.2
 For more information about SHIFT please visit - http://www.shiftnrg.org/
 
 ##Requisites
@@ -12,14 +12,19 @@ Execute the following commands
 ```
 cd ~/
 git clone https://github.com/mrgrshift/shift-snapshot
-mv shift-snapshot/shift-snapshot.sh shift/shift-snapshot.sh
-cd shift/
+cd shift-snapshot/
+bash shift-snapshot.sh help
 ```
 ##Available commands
 
     - create
     - restore
     - log
+    - schedule
+		- hourly
+		- daily
+		- weekly
+		- monthly
 
 ###create
 Command _create_ is for create new snapshot, example of usage:<br>
@@ -56,3 +61,19 @@ Example of output:<br>
   20-10-2016 - 21:36:07 -- Snapshot created successfully at block  49037 ( 43 MB)  
   --------------------------------------------------END                            
 ```
+
+###schedule
+Schedule snapshot creation periodically, with the available parameters:
+		- hourly
+		- daily
+		- weekly
+		- monthly
+
+Example: `bash shift-snapshot.sh schedule daily`
+<br>
+-------------------------------------------------------------
+Â###Notice
+You will have a folder in ~/shift-snapshot/ called `snapshot/` where all your snapshots will be created and stored.
+If you want to use a snapshot from different place (official snapshot for example or other node) you will need to download the snapshot file (with prefix: shift_db*) and copy it to the `~/shift-snapshot/snapshot/` folder.
+After you copy the shift_db*.tar file you can restore the blockchain with: `bash shift-snapshot.sh restore` and will use the last file found in the snapshot/ folder.<br>
+If you use the `schedule` command be aware you will have a log file located in `~/shift-snapshot/cron.log` with this you will know what is happened with your schedule.

@@ -51,7 +51,7 @@ create_snapshot() {
     echo "X Failed to create snapshot."
     exit 1
   else
-    echo "OK snapshot created successfully at block$blockHeight ($dbSize)."
+    echo "$NOW -- OK snapshot created successfully at block$blockHeight ($dbSize)."
     echo $counter > $SNAPSHOT_COUNTER
     echo "$NOW -- Snapshot created successfully at block$blockHeight ($dbSize)" >> $SNAPSHOT_LOG
   fi
