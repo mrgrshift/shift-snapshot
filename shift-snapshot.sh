@@ -28,7 +28,7 @@ if [ ! -f "snapshot/counter.json" ]; then
   sudo chmod a+x shift-snapshot.sh
   echo "0" > $SNAPSHOT_COUNTER
   sudo chown postgres:${USER:=$(/usr/bin/id -run)} snapshot
-  sudo chmod -R g+w snapshot
+  sudo chmod -R 777 snapshot
 fi
 SNAPSHOT_DIRECTORY=snapshot/
 
