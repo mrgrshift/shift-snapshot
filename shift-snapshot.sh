@@ -21,6 +21,10 @@ if [ "\$USER" == "root" ]; then
   exit 1
 fi
 
+SHIFT_CONFIG=~/shift/config.json
+DB_NAME="$(grep "database" $SHIFT_CONFIG | cut -f 4 -d '"')"
+DB_USER="$(grep "user" $SHIFT_CONFIG | cut -f 4 -d '"')"
+DB_PASS="$(grep "password" $SHIFT_CONFIG | cut -f 4 -d '"' | head -1)"
 SNAPSHOT_COUNTER=snapshot/counter.json
 SNAPSHOT_LOG=snapshot/snapshot.log
 if [ ! -f "snapshot/counter.json" ]; then
@@ -39,21 +43,20 @@ NOW=$(date +"%d-%m-%Y - %T")
 create_snapshot() {
   counter=$(<snapshot/counter.json)
   ((counter++))
-  export PGPASSWORD="testing"
+  export PGPASSWORD=$DB_PASS
   echo " + Creating snapshot"
   echo "--------------------------------------------------"
   echo "..."
-  sudo su postgres -c "pg_dump -Ft shift_db > $SNAPSHOT_DIRECTORY'shift_db$NOW.snapshot.tar'"
-  blockHeight=`psql -d shift_db -U shift -h localhost -p 5432 -t -c "select height from blocks order by height desc limit 1;"`
-  dbSize=`psql -d shift_db -U shift -h localhost -p 5432 -t -c "select pg_size_pretty(pg_database_size('shift_db'));"`
+  sudo su postgres -c "pg_dump -Ft $DB_NAME > $SNAPSHOT_DIRECTORY'shift_db$NOW.snapshot.tar'"
+  blockHeight=`psql -d $DB_NAME -U $DB_USER -h localhost -p 5432 -t -c "select height from blocks order by height desc limit 1;"`
+  dbSize=`psql -d $DB_NAME -U $DB_USER -h localhost -p 5432 -t -c "select pg_size_pretty(pg_database_size('$DB_NAME'));"`
 
   if [ $? != 0 ]; then
-    echo "X Failed to create snapshot."
+    echo "X Failed to create snapshot." | tee -a $SNAPSHOT_LOG
     exit 1
   else
-    echo "$NOW -- OK snapshot created successfully at block$blockHeight ($dbSize)."
-    echo $counter > $SNAPSHOT_COUNTER
-    echo "$NOW -- Snapshot created successfully at block$blockHeight ($dbSize)" >> $SNAPSHOT_LOG
+    echo "$NOW -- OK snapshot created successfully at block$blockHeight ($dbSize)." | tee -a $SNAPSHOT_LOG
+    echo $counter >> $SNAPSHOT_COUNTER
   fi
 
 }
@@ -78,8 +81,8 @@ restore_snapshot(){
   fi
 
 #snapshot restoring..
-  export PGPASSWORD="testing"
-  pg_restore -d shift_db "$SNAPSHOT_FILE" -U shift -h localhost -c -n public
+  export PGPASSWORD=$DB_PASS
+  pg_restore -d $DB_NAME "$SNAPSHOT_FILE" -U $DB_USER -h localhost -c -n public
 
   if [ $? != 0 ]; then
     echo "X Failed to restore."
