@@ -1,12 +1,12 @@
 #!/bin/bash
-VERSION="0.2"
+VERSION="0.3"
 
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
 export LANGUAGE=en_US.UTF-8
 
 #============================================================
-#= snapshot.sh v0.2 created by mrgr                         =
+#= snapshot.sh v0.3 created by mrgr                         =
 #= Please consider voting for delegate mrgr                 =
 #============================================================
 echo " "
@@ -22,6 +22,11 @@ if [ "\$USER" == "root" ]; then
 fi
 
 SHIFT_CONFIG=~/shift/config.json
+HTTP_PORT=$(cat $SHIFT_CONFIG | jq '.port')
+LOCALHOST="127.0.0.1:$HTTP_PORT"
+HEIGHT="0"
+LOCAL_HEIGHT="0"
+SYNC="0"
 DB_NAME="$(grep "database" $SHIFT_CONFIG | cut -f 4 -d '"')"
 DB_USER="$(grep "user" $SHIFT_CONFIG | cut -f 4 -d '"')"
 DB_PASS="$(grep "password" $SHIFT_CONFIG | cut -f 4 -d '"' | head -1)"
@@ -39,24 +44,80 @@ SNAPSHOT_DIRECTORY=snapshot/
 
 NOW=$(date +"%d-%m-%Y - %T")
 ################################################################################
+localhost_check(){
+           STATUS=$(curl -sI --max-time 300 --connect-timeout 10 "http://$LOCALHOST/api/peers" | grep "HTTP" | cut -f2 -d" ")
+           if [[ "$STATUS" =~ ^[0-9]+$ ]]; then
+             if [ "$STATUS" -eq "200" ]; then
+                LOCAL_HEIGHT=$(curl -s http://$LOCALHOST/api/loader/status/sync | jq '.height')
+                SYNC=$(curl -s http://$LOCALHOST/api/loader/status/sync | jq '.syncing')
+                top_height
+             fi
+           else
+              echo "ERROR : Your localhost is not responding" | tee -a $SNAPSHOT_LOG
+		LOCAL_HEIGHT="0"
+           fi
+}
+
+top_height(){
+        ## Get height of your 100 peers and save the highest value
+        HEIGHT=$(curl -s http://$LOCALHOST/api/peers | jq '.peers[].height' | sort -nu | tail -n1)
+        if ! [[ "$HEIGHT" =~ ^[0-9]+$ ]];
+            then
+                echo "$SERVER_NAME is off?" | tee -a $SNAPSHOT_LOG
+                HEIGHT="0"
+            fi
+}
+
+sync_status(){
+        while true; do
+                check1=`curl -k -s "http://$LOCALHOST/api/loader/status/sync"| jq '.height'`
+                sleep 10
+
+                if ! [[ "$check1" =~ ^[0-9]+$ ]]; then
+                    check1="0"
+                fi
+                top_height
+                check_top=$(( $HEIGHT - 3 ))
+                if [ "$check1" -lt "$check_top" ]
+                then
+                   pending=$(( $check_top - $check1 ))
+                   echo "$check1 ---> $HEIGHT still syncing... pending $pending"
+                else
+                   echo "$check1 - TOP HEIGHT $HEIGHT"
+                   echo "Sync process finished.."
+                   break
+                fi
+        done
+}
+
+
 
 create_snapshot() {
-  counter=$(<snapshot/counter.json)
-  ((counter++))
+  localhost_check
+  if [ "$LOCAL_HEIGHT" -eq "0" ]; then
+	echo "X Failed to create snapshot. Your localhost is not responding." | tee -a $SNAPSHOT_LOG
+	exit 1
+  else
+     if [ "$SYNC" = "true" ]; then
+        echo "Blockchain syncing, wait until the blockchain is synced.." | tee -a $SNAPSHOT_LOG
+        sync_status
+	SYNC="0"
+     fi
+  fi
+
+  NOW=$(date +"%d-%m-%Y - %T")
   export PGPASSWORD=$DB_PASS
   echo " + Creating snapshot"
   echo "--------------------------------------------------"
   echo "..."
-  sudo su postgres -c "pg_dump -Ft $DB_NAME > $SNAPSHOT_DIRECTORY'shift_db$NOW.snapshot.tar'"
-  blockHeight=`psql -d $DB_NAME -U $DB_USER -h localhost -p 5432 -t -c "select height from blocks order by height desc limit 1;"`
+  sudo su postgres -c "pg_dump -Ft $DB_NAME > $SNAPSHOT_DIRECTORY'shift_db_snapshot.tar'"
   dbSize=`psql -d $DB_NAME -U $DB_USER -h localhost -p 5432 -t -c "select pg_size_pretty(pg_database_size('$DB_NAME'));"`
 
   if [ $? != 0 ]; then
-    echo "X Failed to create snapshot." | tee -a $SNAPSHOT_LOG
+    echo "$NOW -- X Failed to create snapshot." | tee -a $SNAPSHOT_LOG
     exit 1
   else
-    echo "$NOW -- OK snapshot created successfully at block$blockHeight ($dbSize)." | tee -a $SNAPSHOT_LOG
-    echo $counter >> $SNAPSHOT_COUNTER
+    echo "$NOW -- √ New snapshot created successfully at block $LOCAL_HEIGHT ($dbSize)." | tee -a $SNAPSHOT_LOG
   fi
 
 }
@@ -66,29 +127,21 @@ restore_snapshot(){
   echo "--------------------------------------------------"
   SNAPSHOT_FILE=`ls -t snapshot/shift_db* | head  -1`
   if [ -z "$SNAPSHOT_FILE" ]; then
-    echo "****** No snapshot to restore, please consider create it first"
+    echo "$NOW -- X No snapshot to restore, please consider create it first" | tee -a $SNAPSHOT_LOG
     echo " "
     exit 1
   fi
   echo "Snapshot to restore = $SNAPSHOT_FILE"
-
-  read -p "Please stop node app.js first, are you ready (y/n)? " -n 1 -r
-  if [[ ! $REPLY =~ ^[Yy]$ ]]
-  then
-     echo "***** Please stop node.js first.. then execute restore again"
-     echo " "
-     exit 1
-  fi
 
 #snapshot restoring..
   export PGPASSWORD=$DB_PASS
   pg_restore -d $DB_NAME "$SNAPSHOT_FILE" -U $DB_USER -h localhost -c -n public
 
   if [ $? != 0 ]; then
-    echo "X Failed to restore."
+    echo "$NOW -- X Failed to restore." | tee -a $SNAPSHOT_LOG
     exit 1
   else
-    echo "OK snapshot restored successfully."
+    echo "$NOW -- √ snapshot restored successfully." | tee -a $SNAPSHOT_LOG
   fi
 
 }
@@ -109,31 +162,25 @@ schedule_cron(){
 	echo " "
 	case $1 in
 	"hourly")
-		echo "0 * * * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
-		sudo crontab schedule
-		echo "The snapshot has been scheduled every hour";
+		echo -e "Execute: ${CYAN}sudo crontab -e${OFF} and add the following line:"
+		echo "0 * * * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log"
 	;;
 	"daily")
+		echo -e "Execute: ${CYAN}sudo crontab -e${OFF} and add the following line:"
 		echo "0 0 * * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
-                sudo crontab schedule
-                echo "The snapshot has been scheduled once a day";
 	;;
         "weekly")
+		echo -e "Execute: ${CYAN}sudo crontab -e${OFF} and add the following line:"
 		echo "0 0 * * 0 cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
-                sudo crontab schedule
-                echo "The snapshot has been scheduled once a week";
         ;;
         "monthly")
+		echo -e "Execute: ${CYAN}sudo crontab -e${OFF} and add the following line:"
 		echo "0 0 1 * * cd $(pwd) && bash $(pwd)/shift-snapshot.sh create >> $(pwd)/cron.log" > schedule
-                sudo crontab schedule
-                echo "The snapshot has been scheduled once a month";
         ;;
         *)
 	echo "Error: Wrong parameter for cron option."
         ;;
 	esac
-
-	rm schedule
 
 	fi
 }
