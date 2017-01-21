@@ -106,11 +106,12 @@ create_snapshot() {
   fi
 
   NOW=$(date +"%d-%m-%Y - %T")
-  export PGPASSWORD=$DB_PASS
   echo " + Creating snapshot"
   echo "--------------------------------------------------"
   echo "..."
-  sudo su postgres -c "pg_dump -Ft $DB_NAME > $SNAPSHOT_DIRECTORY'shift_db_snapshot.tar'"
+  rm -f $SNAPSHOT_DIRECTORY'shift_db_snapshot.tar'
+  export PGPASSWORD=$DB_PASS
+  pg_dump -U $DB_USER -h localhost -p 5432 -Ft $DB_NAME > $SNAPSHOT_DIRECTORY'shift_db_snapshot.tar'
   dbSize=`psql -d $DB_NAME -U $DB_USER -h localhost -p 5432 -t -c "select pg_size_pretty(pg_database_size('$DB_NAME'));"`
 
   if [ $? != 0 ]; then
